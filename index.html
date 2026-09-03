@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hướng dẫn Reset Machine</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --text:#1f2430; --muted:#5b6472;
+    --line:#e3e6ea; --brand:#2563eb; --brand-soft:#eaf1ff;
+    --danger:#c81e1e; --danger-soft:#fdecec; --ok:#15803d; --ok-soft:#e9f7ee;
+    --warn:#b45309; --warn-soft:#fef3e2;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1218; --card:#171b23; --text:#e7eaf0; --muted:#9aa4b2;
+      --line:#272d38; --brand:#5b9bff; --brand-soft:#16233d;
+      --danger:#ff6b6b; --danger-soft:#3a1d1d; --ok:#57d68d; --ok-soft:#16301f;
+      --warn:#f5b661; --warn-soft:#3a2c14;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
+    line-height:1.6;font-size:16px}
+  .wrap{max-width:820px;margin:0 auto;padding:24px 18px 60px}
+  header{text-align:center;padding:28px 0 10px}
+  header h1{margin:0 0 6px;font-size:28px}
+  header p{margin:0;color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px;margin:18px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  h2{font-size:20px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  .num{display:inline-flex;align-items:center;justify-content:center;
+    width:30px;height:30px;border-radius:50%;background:var(--brand);
+    color:#fff;font-weight:700;font-size:15px;flex:0 0 auto}
+  .box{border-radius:10px;padding:12px 14px;margin:12px 0;border:1px solid transparent}
+  .danger{background:var(--danger-soft);border-color:var(--danger);color:var(--danger)}
+  .warn{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+  .ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+  .box b{color:inherit}
+  ul,ol{margin:8px 0;padding-left:22px}
+  li{margin:6px 0}
+  code,kbd{background:var(--brand-soft);color:var(--brand);padding:2px 7px;
+    border-radius:6px;font-family:Consolas,monospace;font-size:14px;font-weight:600}
+  kbd{border:1px solid var(--brand)}
+  .steps{counter-reset:none}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:15px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600}
+  .mock{background:var(--card);border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;margin:12px 0;font-size:14px}
+  .mock .bar{background:var(--danger-soft);color:var(--danger);padding:8px 12px;
+    font-weight:600;border-bottom:1px solid var(--line)}
+  .mock .row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line)}
+  .mock .row:last-child{border-bottom:0}
+  .btn{display:inline-block;padding:6px 14px;border-radius:8px;font-weight:700;color:#fff}
+  .btn.scan{background:var(--brand)}
+  .btn.del{background:var(--danger)}
+  .tag{font-size:12px;color:var(--muted)}
+  footer{text-align:center;color:var(--muted);font-size:14px;margin-top:30px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>🧹 Reset Machine</h1>
+    <p>Xóa vĩnh viễn dữ liệu — giữ nguyên ứng dụng</p>
+  </header>
+
+  <div class="card">
+    <p style="margin-top:0">Công cụ giúp <b>xóa sạch mọi file cá nhân</b> trên máy tính Windows theo kiểu <b>không thể khôi phục</b>, nhưng vẫn <b>giữ lại</b>:</p>
+    <ul>
+      <li>✅ Windows và hệ thống</li>
+      <li>✅ Các ứng dụng đã cài + cấu hình của chúng</li>
+      <li>✅ Toàn bộ thư mục (chỉ xóa <b>file</b> bên trong, giữ folder)</li>
+    </ul>
+    <div class="box danger">⚠️ <b>Quan trọng:</b> Đã xóa là <b>KHÔNG thể lấy lại</b>. Hãy đọc hết hướng dẫn và luôn bấm <b>Quét</b> để xem trước.</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">1</span> Mở ứng dụng</h2>
+    <ul>
+      <li>Bấm chuột phải vào <code>Reset-Machine-GUI.exe</code></li>
+      <li>Chọn <kbd>Run as administrator</kbd> → bấm <b>Yes</b></li>
+    </ul>
+    <div class="box warn">Nếu Windows hiện cảnh báo SmartScreen: bấm <b>More info</b> → <b>Run anyway</b>.</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">2</span> Bấm "Quét" để xem sẽ xóa gì</h2>
+    <p>Bấm nút <span class="btn scan">1. Quét</span> — ứng dụng liệt kê mọi mục sẽ bị xóa, kèm <b>số file</b> và <b>dung lượng</b>.</p>
+    <div class="mock">
+      <div class="row"><input type="checkbox" checked><b>Downloads</b><span class="tag">C:\Users\...\Downloads</span><span style="margin-left:auto">157 file · 5 GB</span></div>
+      <div class="row"><input type="checkbox" checked><b>Documents</b><span class="tag">C:\Users\...\Documents</span><span style="margin-left:auto">0 file · 0 B</span></div>
+      <div class="row"><input type="checkbox"><b>Git</b> <span class="tag">(ứng dụng — nên bỏ tick)</span><span style="margin-left:auto">7430 file · 415 MB</span></div>
+    </div>
+    <div class="box ok">💡 Mỗi dòng là 1 thư mục. Ứng dụng chỉ <b>xóa file bên trong</b>, <b>giữ lại thư mục</b>.</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">3</span> Bỏ tick những gì muốn giữ</h2>
+    <p>Mặc định mọi mục đều được tick (sẽ xóa). Hãy <b>bỏ tick</b> những mục muốn giữ lại:</p>
+    <ul>
+      <li>Phần mềm / công cụ (Git, VS Code, phần mềm kế toán…)</li>
+      <li>Dữ liệu quan trọng cần giữ</li>
+    </ul>
+    <div class="box warn">⚠️ Với <b>ứng dụng</b>: xóa file bên trong = <b>hỏng app</b>. Muốn giữ app thì <b>phải bỏ tick</b>.</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">4</span> Xóa</h2>
+    <ul>
+      <li>Bấm nút đỏ <span class="btn del">2. XÓA VĨNH VIỄN</span></li>
+      <li>Gõ đúng chữ <kbd>ERASE</kbd> rồi bấm <b>OK</b> để xác nhận</li>
+      <li>Chờ chạy xong (có thanh tiến trình + nhật ký)</li>
+    </ul>
+    <div class="box ok">Nếu báo <b>cần khởi động lại</b> → restart máy để xóa nốt các file đang bị khóa.</div>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ Các tùy chọn</h2>
+    <table>
+      <tr><th>Tùy chọn</th><th>Ý nghĩa</th></tr>
+      <tr><td>Wipe free space</td><td>Ghi đè vùng trống để SSD cũng không khôi phục được. Chậm hơn — tắt nếu muốn nhanh.</td></tr>
+      <tr><td>Xóa cả ổ local khác</td><td>Bật nếu muốn xóa cả file trên ổ D:, E:…</td></tr>
+      <tr><td>Tắt app đang chạy</td><td>Tự tắt app để xóa được file đang mở (mặc định bật).</td></tr>
+      <tr><td>Số lần ghi đè</td><td>Để <b>1</b> là đủ. Tăng lên nếu muốn chắc hơn (chậm hơn).</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>❓ Lưu ý</h2>
+    <ul>
+      <li>🔁 <b>Không thể hoàn tác</b> — luôn Quét và xem kỹ trước khi xóa.</li>
+      <li>🧪 Nên <b>chạy thử trên máy ảo</b> trước khi dùng trên máy thật.</li>
+      <li>🔒 Mức độ không khôi phục: <b>ổ HDD tuyệt đối</b>; <b>ổ SSD</b> an toàn với phần mềm khôi phục thông thường (đủ để bàn giao / bán máy).</li>
+      <li>📄 Kết quả: mọi <b>file</b> bị xóa vĩnh viễn, mọi <b>thư mục</b> vẫn còn (rỗng), ứng dụng được giữ nguyên.</li>
+    </ul>
+  </div>
+
+  <footer>Reset Machine · Hướng dẫn sử dụng</footer>
+
+</div>
+</body>
+</html>
