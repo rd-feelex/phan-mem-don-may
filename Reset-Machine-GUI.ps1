@@ -262,16 +262,18 @@ $ScanScript = {
 # ---------------------------------------------------------------------
 $DeleteScript = {
     param($sync, $paths, $passes, $wipeFree, $core, $keeps, $killProcs)
-    if (-not ([System.Management.Automation.PSTypeName]'NativeDel').Type) {
-        Add-Type -Namespace '' -Name 'NativeDel' -MemberDefinition @"
-[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true, CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
-public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);
-"@
-    }
-    . ([scriptblock]::Create($core))
     $sync.Busy = $true; $sync.Phase = 'delete'; $sync.Cancel = $false
     $sync.FilesDone = 0; $sync.BytesDone = 0
     try {
+        . ([scriptblock]::Create($core))
+        if (-not ([System.Management.Automation.PSTypeName]'NativeDel').Type) {
+            try {
+                Add-Type -Namespace '' -Name 'NativeDel' -MemberDefinition @"
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true, CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
+public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);
+"@
+            } catch { WLog $sync "  (khong nap duoc MoveFileEx - file khoa se khong xoa-khi-reboot, phan con lai van xoa binh thuong)" }
+        }
         if ($killProcs) { Stop-ProcsInPaths $sync $paths $keeps }
         foreach ($p in $paths) {
             if ($sync.Cancel) { WLog $sync "== DA HUY =="; break }
@@ -299,8 +301,10 @@ public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFile
         }
         WLog $sync "===== HOAN TAT ====="
     } catch { WLog $sync "LOI: $($_.Exception.Message)" }
-    $sync.Status = "Xong."
-    $sync.Phase = ''; $sync.Busy = $false
+    finally {
+        $sync.Status = "Xong."
+        $sync.Phase = ''; $sync.Busy = $false
+    }
 }
 
 # ---------------------------------------------------------------------
@@ -484,13 +488,24 @@ $btnScan.Add_Click({
     $lv.Items.Clear(); $txtLog.Clear()
     $lblStatus.Text = "Dang quet..."; $progress.Style = 'Marquee'
     $script:AwaitScan = $true
+    $sync.Busy = $true; $sync.Phase = 'scan'   # dat truoc de tranh race voi timer
     $timer.Start()
     Start-BgWork -Script $ScanScript -Arguments @($sync, $SkipProfiles, [bool]$chkOther.Checked, $KeepPaths)
 })
 
 $btnDelete.Add_Click({
     $paths = @(); $files = 0
-    foreach ($it in $lv.Items) { if ($it.Checked) { $paths += $it.Tag.Path; $files += [int]$it.Tag.Files } }
+    # Lay tu text cot bang (chuoi thuan) - KHONG dung $it.Tag vi object tao o runspace khac se tra ve null
+    foreach ($it in $lv.Items) {
+        if ($it.Checked) {
+            $pp = $it.SubItems[2].Text          # cot 3 = Duong dan
+            if (-not [string]::IsNullOrWhiteSpace($pp)) {
+                $paths += $pp
+                $fc = 0; [void][int]::TryParse($it.SubItems[3].Text, [ref]$fc)
+                $files += $fc
+            }
+        }
+    }
     if ($paths.Count -eq 0) {
         [System.Windows.Forms.MessageBox]::Show("Chua chon muc nao.","Reset Machine") | Out-Null; return
     }
@@ -504,6 +519,7 @@ $btnDelete.Add_Click({
     $progress.Style = 'Continuous'; $progress.Value = 0
     $txtLog.AppendText("===== BAT DAU XOA =====`r`n")
     $script:AwaitDelete = $true
+    $sync.Busy = $true; $sync.Phase = 'delete'   # dat truoc de tranh race voi timer (Add-Type mat ~1-2s)
     $timer.Start()
     Start-BgWork -Script $DeleteScript -Arguments @($sync, $paths, [int]$numPass.Value, [bool]$chkFree.Checked, $CoreFunctions, $KeepPaths, [bool]$chkKill.Checked)
 })
