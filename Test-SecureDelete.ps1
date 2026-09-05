@@ -28,13 +28,13 @@ $core = $core.Substring(2, $core.Length - 4)   # bo @' va '@
 
 Add-Type -Namespace '' -Name 'NativeDel' -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true, CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
-public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);
+public static extern bool MoveFileEx(string lpExistingFileName, System.IntPtr lpNewFileName, int dwFlags);
 "@ -ErrorAction SilentlyContinue
 
 function New-Sync {
     return [hashtable]::Synchronized(@{
         Log = New-Object System.Collections.ArrayList; Scan = New-Object System.Collections.ArrayList
-        FilesTotal=0; FilesDone=0; BytesDone=0; Status=''; Cancel=$false; Busy=$false; Phase=''
+        FilesTotal=0; FilesDone=0; FilesFailed=0; BytesDone=0; Status=''; Cancel=$false; Busy=$false; Phase=''
         PendingReboot=$false; LogPath=''; Skipped=New-Object System.Collections.ArrayList; Wiping=$false
     })
 }
@@ -129,6 +129,38 @@ if ($loai.Count -gt 0) { Write-Host ("  DA LOAI (o ao / dam may) : " + ($loai -j
 Check "co nhan ra o he thong"      ($realLetters -contains $env:SystemDrive)  ($realLetters -join ',')
 Check "khong nhan o mang"          (@($realLetters | Where-Object { $net -contains $_ }).Count -eq 0) "co o mang lot vao"
 Check "moi o deu co che do xoa"    (@($real | Where-Object { $_.Media -notin @('SSD','HDD') }).Count -eq 0) "co o khong ro loai"
+
+Write-Host "`n=== 9. Toc do: file bi KHOA khong duoc lam cham ca me ===" -ForegroundColor Cyan
+# Lỗi "file dang bi giu" la loai TAM THOI -> duoc thu lai, nhung phai nhanh.
+New-Item -ItemType Directory -Path $root -Force | Out-Null
+$locked = Join-Path $root 'dangmo.txt'
+Set-Content -Path $locked -Value ('x' * 5000) -Encoding UTF8
+$fsLock = [System.IO.File]::Open($locked, 'Open', 'ReadWrite', 'None')
+$s9 = New-Sync
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
+Remove-FileSecure $s9 $locked 0
+$sw.Stop()
+$fsLock.Close()
+Write-Host ("  Mot file bi khoa mat {0} ms" -f $sw.ElapsedMilliseconds)
+Check "khong xoa duoc (dung nhu mong doi)" ($s9.FilesDone -eq 0) $s9.FilesDone
+Check "co dem vao so file hong"            ($s9.FilesFailed -eq 1) $s9.FilesFailed
+Check "duoi 700ms (truoc kia ~900ms ngu)"  ($sw.ElapsedMilliseconds -lt 700) "$($sw.ElapsedMilliseconds) ms"
+Check "co ghi RO ly do that vao bao cao"   ($s9.Skipped[0] -match 'process|dùng|used|denied|Exception') $s9.Skipped[0]
+Remove-Item $locked -Force -ErrorAction SilentlyContinue
+
+Write-Host "`n=== 10. Toc do: xoa hang loat file binh thuong ===" -ForegroundColor Cyan
+$bulk = Join-Path $root 'bulk'
+New-Item -ItemType Directory -Path $bulk -Force | Out-Null
+1..300 | ForEach-Object { Set-Content -Path (Join-Path $bulk "f$_.txt") -Value ('y' * 2000) }
+$s10 = New-Sync
+$sw2 = [System.Diagnostics.Stopwatch]::StartNew()
+Remove-FolderSecure $s10 $bulk @{ ($bulk.Substring(0,2)) = 0 } @()
+$sw2.Stop()
+$per = $sw2.ElapsedMilliseconds / 300
+Write-Host ("  300 file mat {0} ms  ->  {1:N2} ms/file" -f $sw2.ElapsedMilliseconds, $per)
+Write-Host ("  Suy ra 23.635 file (nhu may DESKTOP-M8CR8V3): {0:N1} phut" -f ($per * 23635 / 60000))
+Check "xoa het 300 file"        ($s10.FilesDone -eq 300) $s10.FilesDone
+Check "duoi 3 ms/file"          ($per -lt 3) ("{0:N2} ms/file" -f $per)
 
 Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "`n===== KET QUA: $pass dat / $fail hong =====" -ForegroundColor $(if ($fail -eq 0) {'Green'} else {'Red'})

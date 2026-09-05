@@ -69,6 +69,7 @@ $sync = [hashtable]::Synchronized(@{
     Scan       = New-Object System.Collections.ArrayList
     FilesTotal = 0
     FilesDone  = 0
+    FilesFailed= 0
     BytesDone  = 0
     Status     = ''
     Cancel     = $false
@@ -215,28 +216,76 @@ function Test-Kept($path,$keeps){
     return $false
 }
 
-function Schedule-DeleteOnReboot($sync,$path){
+# Lỗi nào đáng thử lại? Chỉ "file đang bị ứng dụng khác giữ" mới đáng chờ.
+# Thiếu quyền hoặc file cloud không mở được thì thử lại 3 lần chỉ tốn thời gian.
+# PowerShell bọc lỗi của phương thức .NET trong MethodInvocationException,
+# nên phải bóc InnerException ra mới thấy lỗi thật (IOException, HResult...).
+function Get-RealError($ex){
+    $cur = $ex; $depth = 0
+    while ($cur -and $cur.InnerException -and $depth -lt 5) { $cur = $cur.InnerException; $depth++ }
+    return $cur
+}
+
+function Test-TransientError($ex){
+    $e = Get-RealError $ex
+    if ($null -eq $e) { return $false }
+    if ($e -is [System.UnauthorizedAccessException]) { return $false }
+    $h = 0; try { $h = [int]$e.HResult } catch {}
+    # 0x80070020 sharing violation, 0x80070021 lock violation -> file đang bị giữ,
+    # chờ một chút rồi thử lại là có cơ hội xóa được.
+    return ($h -eq -2147024864 -or $h -eq -2147024863)
+}
+
+function Describe-Error($ex){
+    $e = Get-RealError $ex
+    if ($null -eq $e) { return "không rõ" }
+    $h = ''; try { $h = " [0x{0:X8}]" -f $e.HResult } catch {}
+    return ($e.GetType().Name + ": " + $e.Message + $h)
+}
+
+function Schedule-DeleteOnReboot($sync,$path,$err){
     # MOVEFILE_DELAY_UNTIL_REBOOT = 4 ; lpNewFileName = null => xóa khi khởi động lại
     # LƯU Ý: cơ chế này của Windows chỉ XÓA THƯỜNG lúc khởi động, KHÔNG ghi đè
     # -> file vẫn có thể khôi phục được. Phải ghi vào báo cáo bàn giao.
+    $why = Describe-Error $err
     try {
-        $ok = [NativeDel]::MoveFileEx($path, $null, 4)
+        # PHAI truyen IntPtr::Zero, KHONG duoc truyen $null vao tham so string:
+        # PowerShell bien $null thanh CHUOI RONG, MoveFileEx hieu la "doi ten sang
+        # duong dan rong" va luon that bai voi loi 3 (ERROR_PATH_NOT_FOUND).
+        # Vi loi nay ma co che xoa-khi-khoi-dong-lai chua bao gio chay duoc.
+        $ok = [NativeDel]::MoveFileEx($path, [IntPtr]::Zero, 4)
         if ($ok) {
             WLog $sync ("  KHÓA - đã lên lịch XÓA KHI KHỞI ĐỘNG LẠI (không ghi đè): " + $path)
             $sync.PendingReboot = $true
             [void]$sync.Skipped.Add("HOÃN TỚI KHỞI ĐỘNG LẠI (xóa thường, không ghi đè): $path")
         } else {
-            WLog $sync ("  LỖI: không lên lịch xóa được: " + $path)
-            [void]$sync.Skipped.Add("KHÔNG XÓA ĐƯỢC: $path")
+            $code = 0
+            try { $code = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error() } catch {}
+            $sync.FilesFailed++
+            # CHỈ ghi log chi tiết cho vài chục file đầu, nếu không log sẽ phình
+            # tới hàng chục nghìn dòng khi cả thư mục đều hỏng.
+            if ($sync.FilesFailed -le 30) {
+                WLog $sync ("  KHÔNG XÓA ĐƯỢC: " + $path)
+                WLog $sync ("      lý do: " + $why)
+                WLog $sync ("      MoveFileEx cũng thất bại, mã lỗi Windows: " + $code)
+            } elseif ($sync.FilesFailed % 500 -eq 0) {
+                WLog $sync ("  ... đã có $($sync.FilesFailed) file không xóa được (lý do gần nhất: $why)")
+            }
+            [void]$sync.Skipped.Add("KHÔNG XÓA ĐƯỢC: $path | $why | MoveFileEx lỗi $code")
         }
     } catch {
-        WLog $sync ("  LỖI: " + $path + " -> " + $_.Exception.Message)
-        [void]$sync.Skipped.Add("KHÔNG XÓA ĐƯỢC: $path ($($_.Exception.Message))")
+        $sync.FilesFailed++
+        if ($sync.FilesFailed -le 30) { WLog $sync ("  LỖI: " + $path + " -> " + $_.Exception.Message) }
+        [void]$sync.Skipped.Add("KHÔNG XÓA ĐƯỢC: $path | $why")
     }
 }
 
 function Remove-FileSecure($sync,$path,$passes){
+    # Dùng thẳng API .NET thay cho Rename-Item / Test-Path / Remove-Item:
+    # mỗi cmdlet PowerShell tốn vài mili-giây, nhân với hàng chục nghìn file
+    # thì thành hàng phút chỉ để chạy máy móc cmdlet.
     $maxTry = 3
+    $lastErr = $null
     for ($attempt=1; $attempt -le $maxTry; $attempt++) {
         try {
             $fi = New-Object System.IO.FileInfo($path)
@@ -263,19 +312,29 @@ function Remove-FileSecure($sync,$path,$passes){
                 }
                 $rng.Dispose()
             }
-            $rand = [System.IO.Path]::GetRandomFileName()
-            Rename-Item -LiteralPath $path -NewName $rand -ErrorAction SilentlyContinue
-            $newPath = Join-Path $fi.DirectoryName $rand
-            if (Test-Path -LiteralPath $newPath) { Remove-Item -LiteralPath $newPath -Force -ErrorAction Stop }
-            else { Remove-Item -LiteralPath $path -Force -ErrorAction Stop }
+            # Đổi tên ngẫu nhiên trước khi xóa để tên file cũ không còn nằm lại
+            # trong bảng thư mục. Đổi tên hỏng thì vẫn xóa theo tên gốc.
+            $target = $path
+            try {
+                $newPath = [System.IO.Path]::Combine($fi.DirectoryName, [System.IO.Path]::GetRandomFileName())
+                [System.IO.File]::Move($path, $newPath)
+                $target = $newPath
+            } catch {}
+            [System.IO.File]::Delete($target)
             $sync.FilesDone++; $sync.BytesDone += $len
             return
         } catch {
-            if ($attempt -lt $maxTry) { Start-Sleep -Milliseconds 300; continue }
-            # Hết lượt thử -> file vẫn bị khóa -> lên lịch xóa khi khởi động lại
-            Schedule-DeleteOnReboot $sync $path
+            $lastErr = $_.Exception
+            # Chỉ chờ và thử lại khi lỗi là loại tạm thời (file đang bị giữ).
+            # Lỗi quyền hay file cloud hỏng thì thử lại vô ích, thoát ngay cho nhanh.
+            if ($attempt -lt $maxTry -and (Test-TransientError $lastErr)) {
+                Start-Sleep -Milliseconds 120; continue
+            }
+            break
         }
     }
+    # Hết lượt thử -> lên lịch xóa khi khởi động lại, kèm lý do thật
+    Schedule-DeleteOnReboot $sync $path $lastErr
 }
 
 # Tắt app theo TÊN tiến trình.
@@ -447,7 +506,7 @@ $DeleteScript = {
     # $restoreRoots: danh sách gốc ổ để tắt System Restore (chỉ ổ THẬT)
     param($sync, $paths, $driveModes, $wipeRoots, $restoreRoots, $core, $keeps, $killProcs, $killNames)
     $sync.Busy = $true; $sync.Phase = 'delete'; $sync.Cancel = $false
-    $sync.FilesDone = 0; $sync.BytesDone = 0
+    $sync.FilesDone = 0; $sync.FilesFailed = 0; $sync.BytesDone = 0
     # Hạ ưu tiên để không tranh I/O với công việc của người dùng.
     try { [System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'Idle' } catch {}
     try {
@@ -456,7 +515,7 @@ $DeleteScript = {
             try {
                 Add-Type -Namespace '' -Name 'NativeDel' -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError=true, CharSet=System.Runtime.InteropServices.CharSet.Unicode)]
-public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);
+public static extern bool MoveFileEx(string lpExistingFileName, System.IntPtr lpNewFileName, int dwFlags);
 "@
             } catch { WLog $sync "  (không nạp được MoveFileEx - file khóa sẽ không xóa-khi-reboot, phần còn lại vẫn xóa bình thường)" }
         }
@@ -1095,7 +1154,7 @@ function Start-DeleteRun($sel) {
     $script:RunWipeRoots = $wipeRoots
     $sync.Skipped.Clear()
 
-    $sync.FilesTotal = $sel.Files; $sync.FilesDone = 0; $sync.BytesDone = 0; $sync.PendingReboot = $false
+    $sync.FilesTotal = $sel.Files; $sync.FilesDone = 0; $sync.FilesFailed = 0; $sync.BytesDone = 0; $sync.PendingReboot = $false
     $btnScan.Enabled = $false; $btnDelete.Enabled = $false; $btnSchedule.Enabled = $false; $btnCancel.Enabled = $true
     $chkOther.Enabled = $false; $chkKill.Enabled = $false; $chkFast.Enabled = $false; $dtpTime.Enabled = $false
     $btnAll.Enabled = $false; $btnNone.Enabled = $false; $tv.Enabled = $false
@@ -1142,6 +1201,7 @@ function Write-HandoverReport {
         $L += ""
         $L += "KẾT QUẢ"
         $L += "  Số file đã xóa   : $($sync.FilesDone) / $($sync.FilesTotal)"
+        $L += "  Số file KHÔNG xóa được : $($sync.FilesFailed)"
         $L += "  Dung lượng       : $(Format-Size $sync.BytesDone)"
         $L += "  Bị hủy giữa chừng: $(if ($sync.Cancel) { 'CÓ' } else { 'Không' })"
         $L += ""
@@ -1150,7 +1210,13 @@ function Write-HandoverReport {
             $L += "File hoãn tới lần khởi động lại chỉ bị XÓA THƯỜNG, KHÔNG được ghi đè,"
             $L += "nghĩa là vẫn có thể khôi phục được. Khởi động lại máy rồi chạy lại app"
             $L += "để xử lý dứt điểm những file này."
-            foreach ($s in $sync.Skipped) { $L += "  - $s" }
+            # Cả thư mục hỏng thì danh sách có thể lên hàng chục nghìn dòng,
+            # cắt bớt để báo cáo còn đọc được.
+            $cap = 200; $n = 0
+            foreach ($s in $sync.Skipped) {
+                if ($n -ge $cap) { $L += "  ... và $($sync.Skipped.Count - $cap) file khác (xem log chi tiết)"; break }
+                $L += "  - $s"; $n++
+            }
         } else {
             $L += "Không có file nào bị bỏ sót."
         }
@@ -1205,7 +1271,9 @@ $timer.Add_Tick({
                 $pct = [int](($sync.FilesDone / $sync.FilesTotal) * 100)
                 if ($pct -gt 100) { $pct = 100 }
                 $progress.Value = $pct
-                $lblStatus.Text = "Đã xóa $($sync.FilesDone)/$($sync.FilesTotal) file ($(Format-Size $sync.BytesDone))  -  $($sync.Status)"
+                $fail = ""
+                if ($sync.FilesFailed -gt 0) { $fail = "  |  $($sync.FilesFailed) file KHÔNG xóa được" }
+                $lblStatus.Text = "Đã xóa $($sync.FilesDone)/$($sync.FilesTotal) file ($(Format-Size $sync.BytesDone))$fail  -  $($sync.Status)"
             }
         }
     }
