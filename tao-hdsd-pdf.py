@@ -210,7 +210,7 @@ para(RX + 14, iy - 2,
 ry = ry + 6 - bh - 30
 ry = heading(RX, ry, "CHẠY BAN ĐÊM NẾU MẤT NHIỀU GIỜ", RW)
 
-bh = 92
+bh = 124
 box(RX, ry + 6, RW, bh, GRNBG, GREEN)
 iy = ry - 8
 for i, s in enumerate([
@@ -227,6 +227,12 @@ for i, s in enumerate([
     txt(RX + 31, iy, s, "SG", 9.2, HexColor("#33413A"))
     iy -= 15
 txt(RX + 31, iy + 2, "Màn hình tắt vẫn được.", "SGI", 8.7, GREY)
+iy -= 14
+txt(RX + 14, iy, "Không chờ được?", "SGB", 9, AMBER)
+para(RX + 14, iy - 12,
+     "Tick “Xóa nhanh” — xong trong vài phút, nhưng giảm an toàn trên SSD. "
+     "Chỉ dùng cho máy nội bộ.",
+     "SG", 8.8, HexColor("#4A3A22"), RW - 26, 10.5)
 
 ry = ry + 6 - bh - 30
 ry = heading(RX, ry, "GẶP SỰ CỐ", RW)

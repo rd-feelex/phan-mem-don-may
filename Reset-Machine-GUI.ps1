@@ -501,10 +501,27 @@ public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFile
                                 try { $proc.Kill() } catch {}
                                 # cipher tạo file tạm khổng lồ lấp đầy vùng trống;
                                 # bị giết giữa chừng thì phải dọn, không là đầy ổ đĩa.
+                                # Phải CHỜ cipher nhả handle rồi mới xóa được, nếu xóa
+                                # ngay thì trượt và báo động giả.
                                 $tmp = Join-Path $r 'EFSTMPWP'
+                                for ($try = 1; $try -le 5; $try++) {
+                                    if (-not (Test-Path -LiteralPath $tmp)) { break }
+                                    Start-Sleep -Milliseconds 800
+                                    try { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction Stop } catch {}
+                                }
                                 if (Test-Path -LiteralPath $tmp) {
-                                    try { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction Stop; WLog $sync "  Đã dọn thư mục tạm EFSTMPWP" }
-                                    catch { WLog $sync "  CẢNH BÁO: còn thư mục tạm $tmp - xóa tay để giải phóng ổ đĩa" }
+                                    # Chỉ là cái vỏ thư mục rỗng thì không đáng báo động.
+                                    $left = [long]0
+                                    Get-ChildItem -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue |
+                                        ForEach-Object { $left += $_.Length }
+                                    if ($left -gt 0) {
+                                        WLog $sync ("  CẢNH BÁO: thư mục tạm $tmp còn " + [math]::Round($left/1GB,2) + " GB - xóa tay để giải phóng ổ đĩa")
+                                        [void]$sync.Skipped.Add("Còn thư mục tạm chiếm ổ đĩa: $tmp")
+                                    } else {
+                                        WLog $sync "  Thư mục tạm EFSTMPWP đã rỗng (không chiếm ổ đĩa), Windows sẽ tự dọn"
+                                    }
+                                } else {
+                                    WLog $sync "  Đã dọn thư mục tạm EFSTMPWP"
                                 }
                                 break
                             }
@@ -565,7 +582,7 @@ $lblWarn.Padding = New-Object System.Windows.Forms.Padding(8,0,8,0)
 
 # ---- Panel tùy chọn ----
 $pnlOpt = New-Object System.Windows.Forms.Panel
-$pnlOpt.Dock = 'Top'; $pnlOpt.Height = 116
+$pnlOpt.Dock = 'Top'; $pnlOpt.Height = 134
 
 $btnScan = New-Object System.Windows.Forms.Button
 $btnScan.Text = "1. Quét (xem sẽ xóa gì)"; $btnScan.Location = New-Object System.Drawing.Point(10,10)
@@ -579,17 +596,33 @@ $chkKill = New-Object System.Windows.Forms.CheckBox
 $chkKill.Text = "Tắt app đang chạy (để xóa được file đang bị khóa)"; $chkKill.Checked = $true
 $chkKill.Location = New-Object System.Drawing.Point(210,30); $chkKill.AutoSize = $true
 
+# Wipe vùng trống là giai đoạn chạy hàng giờ. Cho phép bỏ qua nó, NHƯNG khi bỏ
+# thì ổ SSD phải quay lại ghi đè từng file - nếu không sẽ không còn cơ chế an
+# toàn nào cả, thành xóa thường và khôi phục lại được 100%.
+$chkFast = New-Object System.Windows.Forms.CheckBox
+$chkFast.Text = "Xóa nhanh - bỏ qua wipe vùng trống (giảm an toàn trên SSD)"
+$chkFast.Location = New-Object System.Drawing.Point(210,52); $chkFast.AutoSize = $true
+$chkFast.ForeColor = [System.Drawing.Color]::FromArgb(255,180,90,0)
+
 # Chế độ xóa KHÔNG cho chọn tay nữa - máy tự quyết theo loại ổ đĩa.
 $lblDrives = New-Object System.Windows.Forms.Label
-$lblDrives.Location = New-Object System.Drawing.Point(10,50)
-$lblDrives.Size = New-Object System.Drawing.Size(945,62)
+$lblDrives.Location = New-Object System.Drawing.Point(10,72)
+$lblDrives.Size = New-Object System.Drawing.Size(945,58)
 $lblDrives.Anchor = 'Top,Left,Right'
 $lblDrives.Font = New-Object System.Drawing.Font("Consolas", 8)
 
-$pnlOpt.Controls.AddRange(@($btnScan,$chkOther,$chkKill,$lblDrives))
+$pnlOpt.Controls.AddRange(@($btnScan,$chkOther,$chkKill,$chkFast,$lblDrives))
 
 # ---- Do ổ đĩa 1 lần lúc khởi động, dùng chung cho cả app ----
 $script:Drives = @(Get-RealFixedDrives)
+
+# Chế độ thực tế của một ổ, đã tính đến ô "Xóa nhanh".
+# Xóa nhanh = bỏ wipe. Riêng SSD phải bật lại ghi đè 1 lần, vì bình thường SSD
+# đặt ghi đè = 0 và dựa hoàn toàn vào wipe - bỏ cả hai là không còn gì bảo vệ.
+function Get-DriveMode($d) {
+    if ($chkFast.Checked) { return @{ Passes = 1; Wipe = $false } }
+    return @{ Passes = [int]$d.Passes; Wipe = [bool]$d.Wipe }
+}
 
 function Update-DriveLabel {
     if ($script:Drives.Count -eq 0) {
@@ -597,20 +630,32 @@ function Update-DriveLabel {
         $lblDrives.Text = "KHÔNG tìm thấy ổ đĩa thật nào. Không thể chạy."
         return
     }
-    $lines = @("Chế độ xóa (máy tự quyết theo loại ổ đĩa):")
+    if ($chkFast.Checked) {
+        $lines = @("Chế độ xóa - ĐANG BẬT XÓA NHANH (bỏ qua wipe vùng trống):")
+    } else {
+        $lines = @("Chế độ xóa (máy tự quyết theo loại ổ đĩa):")
+    }
+    $anyWeak = $false
     foreach ($d in $script:Drives) {
-        if ($d.Wipe) {
-            $lines += ("  {0} {1,-3} -> wipe vùng trống {2} (~{3}), không ghi đè từng file  [{4}]" -f `
+        $m = Get-DriveMode $d
+        if ($m.Wipe) {
+            $lines += ("  {0} {1,-3} -> wipe vùng trống {2} (~{3} trở lên), không ghi đè từng file  [{4}]" -f `
                         $d.Letter, $d.Media, (Format-Size $d.FreeBytes), (Format-Duration $d.WipeSecs), $d.Detect)
+        } elseif ($d.Media -eq 'SSD') {
+            $anyWeak = $true
+            $lines += ("  {0} {1,-3} -> ghi đè từng file 1 lần, KHÔNG wipe: chặn được phần mềm recovery thường," -f $d.Letter, $d.Media)
+            $lines += ("           nhưng KHÔNG tuyệt đối trên SSD  [{0}]" -f $d.Detect)
         } else {
-            $lines += ("  {0} {1,-3} -> ghi đè từng file 1 lần, không wipe (nhanh)  [{2}]" -f `
+            $lines += ("  {0} {1,-3} -> ghi đè từng file 1 lần, không wipe (nhanh, an toàn tuyệt đối trên HDD)  [{2}]" -f `
                         $d.Letter, $d.Media, $d.Detect)
         }
     }
-    $lblDrives.ForeColor = [System.Drawing.Color]::FromArgb(255,20,80,20)
+    if ($anyWeak) { $lblDrives.ForeColor = [System.Drawing.Color]::FromArgb(255,150,75,0) }
+    else { $lblDrives.ForeColor = [System.Drawing.Color]::FromArgb(255,20,80,20) }
     $lblDrives.Text = ($lines -join "`r`n")
 }
 Update-DriveLabel
+$chkFast.Add_CheckedChanged({ Update-DriveLabel })
 
 # ---------------------------------------------------------------------
 # CÂY CHỌN - checkbox 3 trạng thái
@@ -957,6 +1002,20 @@ function Confirm-Erase($sel, $whenText) {
     $htxt += [Environment]::NewLine + "KHÔNG THỂ HOÀN TÁC."
     $head.Text = $htxt
 
+    # Xóa nhanh trên SSD: chỉ còn ghi đè từng file, không tuyệt đối. Phải báo rõ
+    # ngay trên hộp xác nhận chứ không để lẫn trong nhãn phía trên.
+    $weak = $false
+    if ($chkFast.Checked) {
+        $usedSel = @{}
+        foreach ($p in $sel.Paths) { if ($p.Length -ge 2) { $usedSel[$p.Substring(0,2).ToUpper()] = $true } }
+        foreach ($d in $script:Drives) {
+            if ($d.Media -eq 'SSD' -and $usedSel.ContainsKey($d.Letter.ToUpper())) { $weak = $true }
+        }
+    }
+    if ($weak) { $head.Height = 90; $head.Text = $htxt + [Environment]::NewLine +
+        "ĐANG BẬT XÓA NHANH: ổ SSD chỉ được ghi đè 1 lần, KHÔNG wipe vùng trống -" + [Environment]::NewLine +
+        "chặn được phần mềm recovery thường nhưng không tuyệt đối." }
+
     $lblList = New-Object System.Windows.Forms.Label
     $lblList.Dock = 'Top'; $lblList.Height = 20; $lblList.Padding = New-Object System.Windows.Forms.Padding(10,2,0,0)
     $lblList.Text = "Danh sách chi tiết những mục sẽ bị xóa:"
@@ -1016,14 +1075,14 @@ function Start-DeleteRun($sel) {
     $paths = $sel.Paths
     # Bảng tra ổ -> số lần ghi đè (SSD=0, HDD=1)
     $driveModes = @{}
-    foreach ($d in $script:Drives) { $driveModes[$d.Letter.ToUpper()] = $d.Passes }
+    foreach ($d in $script:Drives) { $driveModes[$d.Letter.ToUpper()] = (Get-DriveMode $d).Passes }
 
-    # CHỈ wipe những ổ vừa là SSD, vừa THỰC SỰ có file bị xóa.
+    # CHỈ wipe những ổ vừa cần wipe, vừa THỰC SỰ có file bị xóa.
     $used = @{}
     foreach ($p in $paths) { if ($p.Length -ge 2) { $used[$p.Substring(0,2).ToUpper()] = $true } }
     $wipeRoots = @()
     foreach ($d in $script:Drives) {
-        if ($d.Wipe -and $used.ContainsKey($d.Letter.ToUpper())) { $wipeRoots += $d.Root }
+        if ((Get-DriveMode $d).Wipe -and $used.ContainsKey($d.Letter.ToUpper())) { $wipeRoots += $d.Root }
     }
     $restoreRoots = @($script:Drives | ForEach-Object { $_.Root })
 
@@ -1038,7 +1097,7 @@ function Start-DeleteRun($sel) {
 
     $sync.FilesTotal = $sel.Files; $sync.FilesDone = 0; $sync.BytesDone = 0; $sync.PendingReboot = $false
     $btnScan.Enabled = $false; $btnDelete.Enabled = $false; $btnSchedule.Enabled = $false; $btnCancel.Enabled = $true
-    $chkOther.Enabled = $false; $chkKill.Enabled = $false; $dtpTime.Enabled = $false
+    $chkOther.Enabled = $false; $chkKill.Enabled = $false; $chkFast.Enabled = $false; $dtpTime.Enabled = $false
     $btnAll.Enabled = $false; $btnNone.Enabled = $false; $tv.Enabled = $false
     $progress.Style = 'Continuous'; $progress.Value = 0
     $txtLog.AppendText("===== BẮT ĐẦU XÓA =====`r`n")
@@ -1205,7 +1264,7 @@ $timer.Add_Tick({
         $null = Set-KeepAwake $false
         $btnScan.Enabled = $true; $btnDelete.Enabled = $false; $btnCancel.Enabled = $false
         $btnSchedule.Enabled = $false; $dtpTime.Enabled = $true
-        $chkOther.Enabled = $true; $chkKill.Enabled = $true
+        $chkOther.Enabled = $true; $chkKill.Enabled = $true; $chkFast.Enabled = $true
         $btnAll.Enabled = $true; $btnNone.Enabled = $true; $tv.Enabled = $true
 
         $report = Write-HandoverReport
@@ -1361,7 +1420,7 @@ $btnSchedule.Add_Click({
         $lblCountdown.Text = ""
         $btnScan.Enabled = $true; $tv.Enabled = $true
         $btnAll.Enabled = $true; $btnNone.Enabled = $true
-        $chkOther.Enabled = $true; $chkKill.Enabled = $true; $dtpTime.Enabled = $true
+        $chkOther.Enabled = $true; $chkKill.Enabled = $true; $chkFast.Enabled = $true; $dtpTime.Enabled = $true
         Update-SelectionTotals
         $lblStatus.Text = "Đã hủy hẹn giờ."
         return
@@ -1394,7 +1453,7 @@ $btnSchedule.Add_Click({
     $btnSchedule.Enabled = $true
     $btnScan.Enabled = $false; $btnDelete.Enabled = $false; $tv.Enabled = $false
     $btnAll.Enabled = $false; $btnNone.Enabled = $false
-    $chkOther.Enabled = $false; $chkKill.Enabled = $false; $dtpTime.Enabled = $false
+    $chkOther.Enabled = $false; $chkKill.Enabled = $false; $chkFast.Enabled = $false; $dtpTime.Enabled = $false
     $txtLog.AppendText(("Đã hẹn chạy lúc {0:dd/MM/yyyy HH:mm}. Để nguyên máy bật và app mở.`r`n" -f $when))
     $timer.Start()
 })

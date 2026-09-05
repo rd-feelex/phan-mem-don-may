@@ -74,6 +74,7 @@ Mặc định mọi thứ đều được tick. Bấm **dấu +** để bung th�
 
 - **Xóa cả ổ local khác**: bật nếu muốn xóa cả file trên ổ D:, E:...
 - **Tắt app đang chạy** (mặc định bật): tự tắt Outlook, OneDrive, Chrome... để xóa được file chúng đang giữ.
+- **Xóa nhanh** (mặc định tắt): bỏ qua bước wipe vùng trống — thứ chạy hàng giờ. Xong trong vài phút, nhưng trên ổ SSD thì **mức an toàn giảm**: chặn được phần mềm recovery thông thường chứ không tuyệt đối. Chỉ dùng khi dọn máy nội bộ, **đừng dùng khi bàn giao máy ra ngoài**.
 
 Chế độ ghi đè **không còn chọn tay** — app tự quyết theo loại ổ:
 

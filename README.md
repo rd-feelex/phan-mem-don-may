@@ -30,6 +30,17 @@ Máy có cả hai loại ổ thì mỗi ổ dùng chế độ của nó. Giao di
 
 **Wipe vùng trống chỉ chạy trên ổ thực sự có file bị xóa** — không đụng tới ổ không liên quan.
 
+### Ô "Xóa nhanh" — khi không chờ được vài giờ
+
+Tick ô này để **bỏ qua wipe vùng trống**. Khi đó ổ SSD **quay lại ghi đè từng file 1 lần** thay vì 0 — nếu bỏ cả hai thì không còn cơ chế an toàn nào, thành xóa thường và khôi phục lại được 100%.
+
+| | Mặc định | Tick "Xóa nhanh" |
+|---|---|---|
+| **HDD** | Ghi đè 1 lần | Không đổi gì — vốn đã không wipe |
+| **SSD** | Wipe vùng trống (vài giờ) | Ghi đè 1 lần (vài phút) — chặn được phần mềm recovery thường, **không tuyệt đối** |
+
+Hộp xác nhận sẽ hiện cảnh báo riêng nếu chế độ này chạm vào ổ SSD. Dùng khi dọn máy nội bộ; **không nên dùng khi bàn giao máy ra ngoài công ty**.
+
 ## An toàn ổ đĩa
 
 App chỉ đụng tới ổ **map được sang đĩa vật lý**. Đây là bộ lọc quan trọng: Google Drive for Desktop mount thành ổ `G:` mà Windows báo `DriveType=3` — **giống hệt ổ cứng thật**. Nếu không lọc, app sẽ xóa sạch dữ liệu đám mây rồi đồng bộ ngược lên cloud.
