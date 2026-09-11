@@ -163,11 +163,38 @@ y = para(M, y - 4, "Trên Desktop, bấm chuột phải vào Reset-Machine-GUI.e
                    "\"Run as administrator\" → bấm Yes.", CW)
 y = para(M, y, "Nếu Windows báo \"Windows protected your PC\": bấm \"More info\" → \"Run anyway\". "
                "Đây là cảnh báo mặc định cho file .exe nội bộ, không phải virus.", CW)
-y = image(y - 4, "03-giao-dien.png", CW, 290,
+y = image(y - 4, "03-giao-dien.png", CW, 168,
           caption="Giao diện ngay khi mở — app tự nhận loại ổ đĩa, không cần chọn gì thêm")
 y -= 2
 y = note(y, "App không tự xóa chính nó — file .exe trên Desktop luôn được giữ lại.",
          SOFT, BLUE, BODY)
+
+# ---- Ba ô tùy chọn -------------------------------------------------------
+txt(M, y - 6, "Ba ô tùy chọn ở đầu app — cứ để mặc định là đúng", "SGB", 11, DARK)
+y = image(y - 14, "02-tuy-chon.png", 300, 62)
+y += 2
+for name, state, desc in (
+    ("Xóa cả ổ local khác (D:, E:…)", "mặc định TẮT",
+     "chỉ bật khi máy có thêm ổ D:, E: cần dọn luôn. Ổ mạng và ổ đám mây "
+     "(Google Drive, Dropbox…) không bao giờ bị đụng tới."),
+    ("Tắt app đang chạy", "mặc định BẬT",
+     "cứ để nguyên. App tự tắt Chrome, Outlook, Zalo… để xóa được file chúng đang giữ — "
+     "nhớ lưu công việc trước khi bấm nút đỏ."),
+    ("Xóa nhanh", "mặc định TẮT",
+     "bật thì xong sau vài phút thay vì vài giờ, nhưng trên ổ SSD mức an toàn giảm. "
+     "Chỉ dùng khi dọn máy dùng nội bộ; bàn giao máy ra ngoài thì để tắt."),
+):
+    head = "%s (%s): " % (name, state)
+    c.setFont("SGB", 9)
+    hw = pdfmetrics.stringWidth(head, "SGB", 9)
+    txt(M + 10, y, head, "SGB", 9, DARK)
+    first = wrap(desc, "SG", 9, CW - 20 - hw)
+    txt(M + 10 + hw, y, first[0], "SG", 9, BODY)
+    y -= 12
+    rest = " ".join(first[1:])
+    if rest:
+        y = para(M + 10, y, rest, CW - 20, "SG", 9, BODY, 12)
+    y -= 2
 
 footer(1)
 c.showPage()
