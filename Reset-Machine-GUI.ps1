@@ -901,7 +901,7 @@ $dtpTime = New-Object System.Windows.Forms.DateTimePicker
 $dtpTime.Format = 'Custom'; $dtpTime.CustomFormat = 'HH:mm'; $dtpTime.ShowUpDown = $true
 $dtpTime.Location = New-Object System.Drawing.Point(390,35)
 $dtpTime.Size = New-Object System.Drawing.Size(60,24)
-$dtpTime.Value = (Get-Date).Date.AddHours(22)   # mặc định 22:00
+$dtpTime.Value = (Get-Date).Date.AddHours(19)   # mặc định 19:00
 
 $btnSchedule = New-Object System.Windows.Forms.Button
 $btnSchedule.Text = "Hẹn giờ xóa"; $btnSchedule.Location = New-Object System.Drawing.Point(458,30)

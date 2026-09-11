@@ -108,7 +108,7 @@ Chế độ ghi đè **không còn chọn tay** — app tự quyết theo loại
 Với máy SSD, phần wipe vùng trống chạy khá lâu và chiếm ổ đĩa. Cách chạy qua đêm:
 
 1. Quét và bỏ tick như bình thường
-2. Đặt giờ ở ô bên cạnh (mặc định **22:00**)
+2. Đặt giờ ở ô bên cạnh (mặc định **19:00**)
 3. Bấm **"Hẹn giờ xóa"** → gõ `OK` xác nhận **ngay lúc này**
 4. **Để nguyên máy bật và app mở** rồi ra về
 

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Sinh PDF hướng dẫn nhanh 2 trang cho nhân sự - mỗi bước một ảnh minh họa.
 
 Ảnh lấy từ thư mục anh-hdsd/ (chụp màn hình thật của app).
@@ -127,7 +127,6 @@ def note(y, text, bg, bar, color, pad=7):
 def footer(page):
     c.setFillColor(GREY)
     c.setFont("SG", 7.5)
-    c.drawString(M, 26, "Reset Machine v1.2 — ozovn — Bộ phận IT (88-IT)")
     c.drawRightString(W - M, 26, "Trang %d/2" % page)
 
 
@@ -220,7 +219,7 @@ y = image(y - 4, "05-xac-nhan.png", CW, 185,
           caption="Gõ OK thì nút xóa mới sáng lên")
 y -= 2
 y = note(y, "Máy dùng ổ SSD chạy vài giờ. Muốn chạy qua đêm: đặt giờ ở ô \"Hẹn giờ chạy\" "
-            "(mặc định 22:00), bấm \"Hẹn giờ xóa\", gõ OK ngay lúc đó, rồi để nguyên máy bật "
+            "(mặc định 19:00), bấm \"Hẹn giờ xóa\", gõ OK ngay lúc đó, rồi để nguyên máy bật "
             "và app mở rồi ra về.", AMBBG, AMBER, BODY)
 
 # ---- Bước 5 --------------------------------------------------------------
@@ -236,7 +235,7 @@ y = note(y, "3 điều đừng quên:   (1) Đã xóa là mất hẳn, xem kỹ 
             "(3) Đừng bật \"Xóa nhanh\" khi bàn giao máy ra ngoài công ty — mức an toàn giảm.",
          REDBG, RED, RED)
 
-txt(M, y - 2, "Vướng mắc: liên hệ bộ phận IT (88-IT).", "SGI", 9, GREY)
+txt(M, y - 2, "Vướng mắc: liên hệ bộ phận IT.", "SGI", 9, GREY)
 
 footer(2)
 c.save()
