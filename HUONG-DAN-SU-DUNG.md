@@ -43,7 +43,7 @@ Ngay khi mở, app tự dò ổ đĩa và hiện chế độ xóa sẽ dùng cho
 | 1 | Bấm **"1. Quét (xem sẽ xóa gì)"** → hiện **cây thư mục**, mỗi dòng kèm **số file + dung lượng + ngày sửa gần nhất** |
 | 2 | **Bỏ tick** những mục muốn giữ (app portable, dữ liệu cần giữ...) |
 | 3 | Bấm nút đỏ **"2. XÓA VĨNH VIỄN"** (hoặc đặt giờ rồi bấm **"Hẹn giờ xóa"** — xem mục 5) |
-| 4 | Xem lại **danh sách chi tiết** hiện ra, gõ đúng chữ **`ERASE`** rồi bấm nút đỏ |
+| 4 | Xem lại **danh sách chi tiết** hiện ra, gõ đúng chữ **`OK`** rồi bấm nút đỏ |
 | 5 | Chờ chạy xong. Nếu báo có file bị khóa → **khởi động lại máy rồi chạy lại app** (xem cảnh báo ở mục 6) |
 
 ### Chọn tới từng file
@@ -91,7 +91,7 @@ Với máy SSD, phần wipe vùng trống chạy khá lâu và chiếm ổ đĩa
 
 1. Quét và bỏ tick như bình thường
 2. Đặt giờ ở ô bên cạnh (mặc định **22:00**)
-3. Bấm **"Hẹn giờ xóa"** → gõ `ERASE` xác nhận **ngay lúc này**
+3. Bấm **"Hẹn giờ xóa"** → gõ `OK` xác nhận **ngay lúc này**
 4. **Để nguyên máy bật và app mở** rồi ra về
 
 App tự chặn máy ngủ và chạy đúng giờ đã hẹn. Màn hình vẫn tắt bình thường. Muốn hủy thì bấm **"Hủy hẹn giờ"**.

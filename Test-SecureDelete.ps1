@@ -34,7 +34,7 @@ public static extern bool MoveFileEx(string lpExistingFileName, System.IntPtr lp
 function New-Sync {
     return [hashtable]::Synchronized(@{
         Log = New-Object System.Collections.ArrayList; Scan = New-Object System.Collections.ArrayList
-        FilesTotal=0; FilesDone=0; FilesFailed=0; BytesDone=0; Status=''; Cancel=$false; Busy=$false; Phase=''
+        FilesTotal=0; FilesDone=0; FilesFailed=0; ConsecFail=0; RebootQueued=0; BytesDone=0; Status=''; Cancel=$false; Busy=$false; Phase=''
         PendingReboot=$false; LogPath=''; Skipped=New-Object System.Collections.ArrayList; Wiping=$false
     })
 }
@@ -161,6 +161,29 @@ Write-Host ("  300 file mat {0} ms  ->  {1:N2} ms/file" -f $sw2.ElapsedMilliseco
 Write-Host ("  Suy ra 23.635 file (nhu may DESKTOP-M8CR8V3): {0:N1} phut" -f ($per * 23635 / 60000))
 Check "xoa het 300 file"        ($s10.FilesDone -eq 300) $s10.FilesDone
 Check "duoi 3 ms/file"          ($per -lt 3) ("{0:N2} ms/file" -f $per)
+
+Write-Host "`n=== 11. Cau dao ngat: ca thu muc bi khoa khong duoc treo may ===" -ForegroundColor Cyan
+# Mo phong ca thu muc bi khoa (nhu Dropbox tren may DESKTOP-M8CR8V3)
+$lockDir = Join-Path $root 'khoa'
+New-Item -ItemType Directory -Path $lockDir -Force | Out-Null
+$handles = @()
+1..60 | ForEach-Object {
+    $f = Join-Path $lockDir "k$_.txt"
+    Set-Content -Path $f -Value 'z'
+    $handles += [System.IO.File]::Open($f,'Open','ReadWrite','None')
+}
+$s11 = New-Sync
+$sw3 = [System.Diagnostics.Stopwatch]::StartNew()
+Remove-FolderSecure $s11 $lockDir @{ ($lockDir.Substring(0,2)) = 0 } @()
+$sw3.Stop()
+$handles | ForEach-Object { $_.Close() }
+$perLock = $sw3.ElapsedMilliseconds / 60
+Write-Host ("  60 file bi khoa mat {0} ms  ->  {1:N1} ms/file" -f $sw3.ElapsedMilliseconds, $perLock)
+Write-Host ("  Suy ra 23.635 file bi khoa: {0:N1} phut" -f ($perLock * 23635 / 60000))
+Check "khong xoa duoc file nao (dung nhu mong doi)" ($s11.FilesDone -eq 0) $s11.FilesDone
+Check "cau dao da ngat (duoi 100ms/file)"           ($perLock -lt 100) ("{0:N1} ms/file" -f $perLock)
+Check "co dem file hong hoac hoan reboot"           (($s11.FilesFailed + $s11.RebootQueued) -eq 60) "$($s11.FilesFailed)+$($s11.RebootQueued)"
+Remove-Item $lockDir -Recurse -Force -ErrorAction SilentlyContinue
 
 Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "`n===== KET QUA: $pass dat / $fail hong =====" -ForegroundColor $(if ($fail -eq 0) {'Green'} else {'Red'})

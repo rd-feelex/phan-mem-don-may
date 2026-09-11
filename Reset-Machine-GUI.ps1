@@ -70,6 +70,8 @@ $sync = [hashtable]::Synchronized(@{
     FilesTotal = 0
     FilesDone  = 0
     FilesFailed= 0
+    ConsecFail = 0    # so file hong LIEN TIEP -> de ngat vong thu lai khi ca thu muc deu hong
+    RebootQueued = 0  # so file da len lich xoa khi khoi dong lai
     BytesDone  = 0
     Status     = ''
     Cancel     = $false
@@ -248,6 +250,23 @@ function Schedule-DeleteOnReboot($sync,$path,$err){
     # LƯU Ý: cơ chế này của Windows chỉ XÓA THƯỜNG lúc khởi động, KHÔNG ghi đè
     # -> file vẫn có thể khôi phục được. Phải ghi vào báo cáo bàn giao.
     $why = Describe-Error $err
+    $sync.ConsecFail++
+
+    # Windows luu danh sach xoa-khi-khoi-dong-lai vao MOT gia tri registry.
+    # Nhoi hang chuc nghin duong dan vao do la hong registry, ma xoa kieu do
+    # cung KHONG ghi de nen chang an toan hon. Chan lai o 500.
+    if ($sync.RebootQueued -ge 500) {
+        $sync.FilesFailed++
+        if ($sync.RebootQueued -eq 500) {
+            $sync.RebootQueued++
+            WLog $sync "  DUNG lên lịch xóa-khi-khởi-động-lại: đã quá 500 file."
+            WLog $sync "  Quá nhiều file bị khóa -> cần xử lý gốc (đóng app đang giữ file,"
+            WLog $sync "  hoặc gỡ/khôi phục ứng dụng đồng bộ đám mây) rồi chạy lại."
+        }
+        [void]$sync.Skipped.Add("KHÔNG XÓA ĐƯỢC (quá 500 file chờ khởi động lại, dừng lên lịch): $path | $why")
+        return
+    }
+
     try {
         # PHAI truyen IntPtr::Zero, KHONG duoc truyen $null vao tham so string:
         # PowerShell bien $null thanh CHUOI RONG, MoveFileEx hieu la "doi ten sang
@@ -255,7 +274,13 @@ function Schedule-DeleteOnReboot($sync,$path,$err){
         # Vi loi nay ma co che xoa-khi-khoi-dong-lai chua bao gio chay duoc.
         $ok = [NativeDel]::MoveFileEx($path, [IntPtr]::Zero, 4)
         if ($ok) {
-            WLog $sync ("  KHÓA - đã lên lịch XÓA KHI KHỞI ĐỘNG LẠI (không ghi đè): " + $path)
+            $sync.RebootQueued++
+            if ($sync.RebootQueued -le 30) {
+                WLog $sync ("  KHÓA - đã lên lịch XÓA KHI KHỞI ĐỘNG LẠI (không ghi đè): " + $path)
+                WLog $sync ("      lý do không xóa được ngay: " + $why)
+            } elseif ($sync.RebootQueued % 100 -eq 0) {
+                WLog $sync ("  ... đã lên lịch $($sync.RebootQueued) file (lý do gần nhất: $why)")
+            }
             $sync.PendingReboot = $true
             [void]$sync.Skipped.Add("HOÃN TỚI KHỞI ĐỘNG LẠI (xóa thường, không ghi đè): $path")
         } else {
@@ -293,6 +318,16 @@ function Remove-FileSecure($sync,$path,$passes){
                 $fi.Attributes = [System.IO.FileAttributes]::Normal
             }
             $len = $fi.Length
+            # File đám mây chưa tải về (OneDrive/Dropbox/Google Drive on-demand):
+            # trên đĩa không có dữ liệu thật để ghi đè, mà mở ra để ghi còn kích
+            # hoạt tải file từ mạng về -> treo rất lâu. Bỏ qua bước ghi đè.
+            #   0x1000   FILE_ATTRIBUTE_OFFLINE
+            #   0x40000  FILE_ATTRIBUTE_RECALL_ON_OPEN
+            #   0x400000 FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+            $a = [int]$fi.Attributes
+            if ((($a -band 0x1000) -ne 0) -or (($a -band 0x40000) -ne 0) -or (($a -band 0x400000) -ne 0)) {
+                $passes = 0
+            }
             # passes=0 (ổ SSD): bỏ qua ghi đè từng file - vô dụng vì wear-leveling.
             # Vùng dữ liệu sẽ được xử lý ở bước wipe vùng trống phía sau.
             if ($len -gt 0 -and $passes -gt 0) {
@@ -322,12 +357,15 @@ function Remove-FileSecure($sync,$path,$passes){
             } catch {}
             [System.IO.File]::Delete($target)
             $sync.FilesDone++; $sync.BytesDone += $len
+            $sync.ConsecFail = 0
             return
         } catch {
             $lastErr = $_.Exception
             # Chỉ chờ và thử lại khi lỗi là loại tạm thời (file đang bị giữ).
-            # Lỗi quyền hay file cloud hỏng thì thử lại vô ích, thoát ngay cho nhanh.
-            if ($attempt -lt $maxTry -and (Test-TransientError $lastErr)) {
+            # CẦU DAO NGẮT: nếu đã có 20 file hỏng liên tiếp thì khóa là của cả
+            # thư mục chứ không phải của riêng file nào - thử lại chỉ tốn thời gian.
+            # Không có nó, một thư mục 23.000 file hỏng sẽ ngốn hơn 1 giờ chỉ để ngủ.
+            if ($attempt -lt $maxTry -and (Test-TransientError $lastErr) -and $sync.ConsecFail -lt 20) {
                 Start-Sleep -Milliseconds 120; continue
             }
             break
@@ -506,7 +544,7 @@ $DeleteScript = {
     # $restoreRoots: danh sách gốc ổ để tắt System Restore (chỉ ổ THẬT)
     param($sync, $paths, $driveModes, $wipeRoots, $restoreRoots, $core, $keeps, $killProcs, $killNames)
     $sync.Busy = $true; $sync.Phase = 'delete'; $sync.Cancel = $false
-    $sync.FilesDone = 0; $sync.FilesFailed = 0; $sync.BytesDone = 0
+    $sync.FilesDone = 0; $sync.FilesFailed = 0; $sync.ConsecFail = 0; $sync.RebootQueued = 0; $sync.BytesDone = 0
     # Hạ ưu tiên để không tranh I/O với công việc của người dùng.
     try { [System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'Idle' } catch {}
     try {
@@ -1088,7 +1126,7 @@ function Confirm-Erase($sel, $whenText) {
     $pnl.Dock = 'Bottom'; $pnl.Height = 80
 
     $lblAsk = New-Object System.Windows.Forms.Label
-    $lblAsk.Text = "Gõ đúng chữ  ERASE  để xác nhận:"
+    $lblAsk.Text = "Gõ đúng chữ  OK  để xác nhận:"
     $lblAsk.Location = New-Object System.Drawing.Point(10,12); $lblAsk.AutoSize = $true
 
     $txtAsk = New-Object System.Windows.Forms.TextBox
@@ -1109,15 +1147,15 @@ function Confirm-Erase($sel, $whenText) {
     $btnNo.Size = New-Object System.Drawing.Size(120,32)
     $btnNo.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
 
-    # Nút xóa chỉ bật khi gõ đúng ERASE.
-    $txtAsk.Add_TextChanged({ $btnOk.Enabled = ($txtAsk.Text -ceq 'ERASE') }.GetNewClosure())
+    # Nút xóa chỉ bật khi gõ đúng OK.
+    $txtAsk.Add_TextChanged({ $btnOk.Enabled = ($txtAsk.Text -ceq 'OK') }.GetNewClosure())
 
     $pnl.Controls.AddRange(@($lblAsk,$txtAsk,$btnOk,$btnNo))
     $dlg.Controls.AddRange(@($lst,$lblList,$head,$pnl))
     $dlg.AcceptButton = $btnOk; $dlg.CancelButton = $btnNo
 
     $r = $dlg.ShowDialog($form)
-    $ok = ($r -eq [System.Windows.Forms.DialogResult]::OK -and $txtAsk.Text -ceq 'ERASE')
+    $ok = ($r -eq [System.Windows.Forms.DialogResult]::OK -and $txtAsk.Text -ceq 'OK')
     $dlg.Dispose()
     return $ok
 }
@@ -1154,7 +1192,7 @@ function Start-DeleteRun($sel) {
     $script:RunWipeRoots = $wipeRoots
     $sync.Skipped.Clear()
 
-    $sync.FilesTotal = $sel.Files; $sync.FilesDone = 0; $sync.FilesFailed = 0; $sync.BytesDone = 0; $sync.PendingReboot = $false
+    $sync.FilesTotal = $sel.Files; $sync.FilesDone = 0; $sync.FilesFailed = 0; $sync.ConsecFail = 0; $sync.RebootQueued = 0; $sync.BytesDone = 0; $sync.PendingReboot = $false
     $btnScan.Enabled = $false; $btnDelete.Enabled = $false; $btnSchedule.Enabled = $false; $btnCancel.Enabled = $true
     $chkOther.Enabled = $false; $chkKill.Enabled = $false; $chkFast.Enabled = $false; $dtpTime.Enabled = $false
     $btnAll.Enabled = $false; $btnNone.Enabled = $false; $tv.Enabled = $false
@@ -1202,6 +1240,7 @@ function Write-HandoverReport {
         $L += "KẾT QUẢ"
         $L += "  Số file đã xóa   : $($sync.FilesDone) / $($sync.FilesTotal)"
         $L += "  Số file KHÔNG xóa được : $($sync.FilesFailed)"
+        $L += "  Số file hoãn tới khởi động lại : $($sync.RebootQueued)"
         $L += "  Dung lượng       : $(Format-Size $sync.BytesDone)"
         $L += "  Bị hủy giữa chừng: $(if ($sync.Cancel) { 'CÓ' } else { 'Không' })"
         $L += ""
@@ -1339,9 +1378,22 @@ $timer.Add_Tick({
         $tail = ""
         if ($report) { $tail = "`n`nBáo cáo bàn giao:`n$report" }
 
-        if ($sync.PendingReboot) {
+        if ($sync.FilesDone -eq 0 -and ($sync.FilesFailed + $sync.RebootQueued) -gt 0) {
+            # Truong hop tren may DESKTOP-M8CR8V3: khong xoa duoc file nao ma van
+            # bao "hoan tat" thi nguoi dung tuong da sach. Phai noi thang.
             [System.Windows.Forms.MessageBox]::Show(
-                "Đã hoàn tất xóa.`n`nCó $($sync.Skipped.Count) file đang bị khóa -> đã lên lịch xóa khi khởi động lại." +
+                "KHÔNG xóa được file nào." +
+                "`n`nĐã thử $($sync.FilesTotal) file: $($sync.FilesFailed) file không xóa được, " +
+                "$($sync.RebootQueued) file phải hoãn tới lần khởi động lại." +
+                "`n`nDữ liệu VẪN CÒN NGUYÊN trên máy. Hãy mở log để xem lý do cụ thể," +
+                "`nxử lý gốc (đóng ứng dụng đang giữ file, gỡ ứng dụng đồng bộ đám mây)" +
+                "`nrồi chạy lại." + $tail,
+                "Reset Machine",
+                [System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+        } elseif ($sync.PendingReboot) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Đã xóa $($sync.FilesDone)/$($sync.FilesTotal) file." +
+                "`n`nCó $($sync.RebootQueued) file đang bị khóa -> đã lên lịch xóa khi khởi động lại." +
                 "`nLƯU Ý: những file đó chỉ bị XÓA THƯỜNG, KHÔNG được ghi đè - vẫn có thể khôi phục." +
                 "`nHãy khởi động lại máy rồi chạy lại app để xử lý dứt điểm." + $tail,
                 "Reset Machine",
@@ -1479,7 +1531,7 @@ $btnDelete.Add_Click({
 })
 
 # ---- Hẹn giờ ----
-# Xác nhận ERASE lấy NGAY LÚC BẤM HẸN, không phải lúc tới giờ (lúc đó không có ai ở máy).
+# Xác nhận OK lấy NGAY LÚC BẤM HẸN, không phải lúc tới giờ (lúc đó không có ai ở máy).
 $btnSchedule.Add_Click({
     if ($script:ScheduledAt) {   # đang hẹn -> nút này thành "Hủy hẹn"
         $script:ScheduledAt = $null; $script:PendingSel = $null

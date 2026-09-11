@@ -52,7 +52,7 @@ App chỉ đụng tới ổ **map được sang đĩa vật lý**. Đây là b�
 1. Bấm phải `Reset-Machine-GUI.exe` → **Run as administrator**
 2. Bấm **"1. Quét (xem sẽ xóa gì)"** → hiện **cây thư mục** kèm số file, dung lượng và ngày sửa gần nhất
 3. **Bỏ tick** những mục muốn giữ lại (mặc định tick hết). Bấm dấu **+** để bung thư mục và chọn tới **từng file**
-4. Bấm **"2. XÓA VĨNH VIỄN"** → xem lại danh sách chi tiết → gõ xác nhận `ERASE` → xóa
+4. Bấm **"2. XÓA VĨNH VIỄN"** → xem lại danh sách chi tiết → gõ xác nhận `OK` → xóa
 
 ### Cây chọn
 
@@ -69,7 +69,7 @@ powershell -ExecutionPolicy Bypass -File Reset-Machine-GUI.ps1
 
 ### Hẹn giờ chạy ngoài giờ làm việc
 
-Wipe vùng trống trên SSD có thể mất vài giờ. Chọn xong các mục, đặt giờ rồi bấm **"Hẹn giờ xóa"** và gõ `ERASE` ngay lúc đó. **Để nguyên máy bật và app mở** rồi ra về — app tự chặn máy ngủ và chạy đúng giờ đã hẹn (màn hình vẫn tắt bình thường).
+Wipe vùng trống trên SSD có thể mất vài giờ. Chọn xong các mục, đặt giờ rồi bấm **"Hẹn giờ xóa"** và gõ `OK` ngay lúc đó. **Để nguyên máy bật và app mở** rồi ra về — app tự chặn máy ngủ và chạy đúng giờ đã hẹn (màn hình vẫn tắt bình thường).
 
 Trong lúc chạy, app hạ ưu tiên I/O xuống mức thấp nhất để không tranh ổ đĩa với công việc khác.
 

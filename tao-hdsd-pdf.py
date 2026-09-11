@@ -135,7 +135,7 @@ steps = [
      "Mặc định mọi thứ đều tick = sẽ bị xóa. Bấm dấu + để bung thư mục, bỏ tick từng file.",
      "Cần giữ nhiều: bấm “Bỏ chọn tất cả” rồi tick lại đúng thứ cần xóa."),
     ("Bấm nút đỏ “2. XÓA VĨNH VIỄN”",
-     "App hiện danh sách chi tiết để xem lại lần cuối. Gõ đúng chữ ERASE rồi bấm nút đỏ.",
+     "App hiện danh sách chi tiết để xem lại lần cuối. Gõ đúng chữ OK rồi bấm nút đỏ.",
      None),
     ("Chờ chạy xong",
      "Có thanh tiến trình, máy vẫn dùng được bình thường trong lúc chạy.",
@@ -216,7 +216,7 @@ iy = ry - 8
 for i, s in enumerate([
     "Quét và bỏ tick như bước 2 – 3.",
     "Đặt giờ ở ô cạnh nút xóa (mặc định 22:00).",
-    "Bấm “Hẹn giờ xóa”, gõ ERASE ngay lúc này.",
+    "Bấm “Hẹn giờ xóa”, gõ OK ngay lúc này.",
     "Để nguyên máy bật và app mở rồi ra về.",
 ], 1):
     c.setFillColor(GREEN)
