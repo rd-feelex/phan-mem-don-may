@@ -2,6 +2,24 @@
 
 Công cụ xóa **vĩnh viễn mọi file** trên máy (không khôi phục được), **giữ nguyên**: Windows, app đã cài, cấu hình app (AppData), và toàn bộ khung thư mục (chỉ xóa file bên trong).
 
+> **Nhân sự dùng máy chỉ cần bản in 2 trang `HDSD-Reset-Machine.pdf`.** File này dành cho IT.
+
+---
+
+## 0. Lấy app ở đâu
+
+App bản mới nhất nằm trên NAS:
+
+```
+\\192.168.1.13\ozovn-public\Du lieu hien hanh\88-IT\Phần mềm dọn máy
+```
+
+Trong đó có `Reset-Machine-GUI.exe` và `HDSD-Reset-Machine.pdf`. Copy file `.exe` ra **Desktop** của máy cần dọn rồi chạy.
+
+App **tự loại chính nó ra khỏi vùng xóa**, nên để file trên Desktop vẫn an toàn — chạy xong file vẫn còn.
+
+> Sau khi build lại `.exe`, nhớ copy đè bản mới lên NAS (kèm PDF nếu HDSD đổi).
+
 ---
 
 ## 1. Chuẩn bị (làm 1 lần)

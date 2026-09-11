@@ -49,6 +49,7 @@ App chỉ đụng tới ổ **map được sang đĩa vật lý**. Đây là b�
 
 ## Cách dùng
 
+0. Lấy `Reset-Machine-GUI.exe` ở `\\192.168.1.13\ozovn-public\Du lieu hien hanh\88-IT\Phần mềm dọn máy`, copy ra Desktop máy cần dọn (app tự loại chính nó khỏi vùng xóa)
 1. Bấm phải `Reset-Machine-GUI.exe` → **Run as administrator**
 2. Bấm **"1. Quét (xem sẽ xóa gì)"** → hiện **cây thư mục** kèm số file, dung lượng và ngày sửa gần nhất
 3. **Bỏ tick** những mục muốn giữ lại (mặc định tick hết). Bấm dấu **+** để bung thư mục và chọn tới **từng file**

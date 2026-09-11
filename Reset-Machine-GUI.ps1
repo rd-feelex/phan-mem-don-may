@@ -46,6 +46,18 @@ $KeepPaths = @(
     # 'D:\MERGE'
 )
 
+# Tự giữ lại CHÍNH FILE APP đang chạy. Nhân sự hay copy .exe ra Desktop rồi chạy,
+# mà Desktop cũng nằm trong vùng xóa -> app sẽ xóa mất chính nó (file đang chạy bị
+# khóa nên bị hoãn tới lần khởi động lại, xong là mất, phải copy lại từ NAS).
+$SelfPath = $null
+try {
+    $SelfPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    # Chạy bằng .ps1 thì MainModule là powershell.exe -> lấy đường dẫn script thay vì
+    # giữ lại nguyên powershell.exe trong System32 (vốn đã không bị xóa).
+    if ([System.IO.Path]::GetFileName($SelfPath) -match '^(powershell|pwsh)\.exe$') { $SelfPath = $PSCommandPath }
+} catch { $SelfPath = $PSCommandPath }
+if (-not [string]::IsNullOrWhiteSpace($SelfPath)) { $KeepPaths += $SelfPath }
+
 # Các app hay GIỮ FILE trong vùng xóa -> tắt trước khi xóa để file không bị khóa.
 # (Ví dụ: Outlook giữ file .pst trong Documents, OneDrive giữ file đang đồng bộ.)
 # Thêm tên tiến trình (không có đuôi .exe) vào đây nếu gặp app khác giữ file.

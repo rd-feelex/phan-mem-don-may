@@ -185,6 +185,30 @@ Check "cau dao da ngat (duoi 100ms/file)"           ($perLock -lt 100) ("{0:N1} 
 Check "co dem file hong hoac hoan reboot"           (($s11.FilesFailed + $s11.RebootQueued) -eq 60) "$($s11.FilesFailed)+$($s11.RebootQueued)"
 Remove-Item $lockDir -Recurse -Force -ErrorAction SilentlyContinue
 
+Write-Host "`n=== 12. App tu loai CHINH NO ra khoi vung xoa ===" -ForegroundColor Cyan
+# Nhan su copy .exe ra Desktop roi chay - Desktop cung nam trong vung xoa.
+# Trich thang doan tinh $SelfPath trong app ra chay de test dung code that.
+$appSrc  = Get-Content $app -Raw
+$mSelf   = [regex]::Match($appSrc, '(?s)\$SelfPath = \$null.*?\$KeepPaths \+= \$SelfPath \}')
+Check "tim thay doan tu loai tru trong app" ($mSelf.Success) "khong thay - co the da bi xoa khoi app"
+if ($mSelf.Success) {
+    # Test nay chay trong powershell.exe -> mo phong dung truong hop nhan su
+    # chay app bang file script: MainModule la powershell.exe, phai lay $PSCommandPath.
+    # $PSCommandPath la bien tu dong, trong scriptblock tao bang Create() no luon rong,
+    # nen thay bang bien gia de mo phong dung duong dan script that.
+    $KeepPaths = @()
+    $FakeCmdPath = 'C:\Users\nhansu\Desktop\Reset-Machine-GUI.ps1'
+    . ([scriptblock]::Create($mSelf.Value.Replace('$PSCommandPath', '$FakeCmdPath')))
+    $me = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    Check "co them duong dan vao KeepPaths" ($KeepPaths.Count -eq 1) $KeepPaths.Count
+    # Chay bang .ps1 -> phai lay duong dan script, KHONG phai powershell.exe
+    Check "chay .ps1 thi giu script, khong giu powershell.exe" `
+          ($KeepPaths[0] -eq $FakeCmdPath -and $KeepPaths[0] -ne $me) "$($KeepPaths[0])"
+    # Va Test-Kept that su chan duoc chinh file do
+    Check "Test-Kept chan dung file app" (Test-Kept $KeepPaths[0] $KeepPaths) "$($KeepPaths[0])"
+    Check "Test-Kept khong chan file khac" (-not (Test-Kept 'C:\Users\x\Desktop\anh.jpg' $KeepPaths)) "chan nham"
+}
+
 Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "`n===== KET QUA: $pass dat / $fail hong =====" -ForegroundColor $(if ($fail -eq 0) {'Green'} else {'Red'})
 if ($fail -gt 0) { exit 1 }
